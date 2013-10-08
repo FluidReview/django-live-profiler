@@ -1,6 +1,9 @@
+import zmq
 import threading
 
-import zmq 
+from django.conf import settings
+
+AGGREGATE_SERVER = getattr(settings, 'LIVEPROFILER_SERVER', 'localhost')
 
 class _RemoteMethod:
     def __init__(self, socket, name):
@@ -15,23 +18,22 @@ class Aggregator(object):
     def __init__(self):
         self.context = zmq.Context()
         self.data_socket = self.context.socket(zmq.PUB)
-        self.data_socket.connect ("tcp://localhost:5556")
+        self.data_socket.connect ("tcp://%s:5556" % AGGREGATE_SERVER)
         self.control_socket = self.context.socket(zmq.REQ)
-        self.control_socket.connect("tcp://localhost:5557")
-    
+        self.control_socket.connect("tcp://%s:5557" % AGGREGATE_SERVER)
+
     def insert(self, tags, values):
         self.insert_all([(tags, values)])
-        
+
     def insert_all(self, items):
         self.data_socket.send_pyobj(items)
-        
-        
+
+
     def __getattr__(self, name):
         return _RemoteMethod(self.control_socket, name)
-    
+
     def ping(self):
         self.data_socket.send_pyobj(None)
-
 
 _local = threading.local()
 

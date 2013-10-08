@@ -32,8 +32,6 @@ def execute_sql(self, *args, **kwargs):
 
 INSTRUMENTED = False
 
-
-
 if not INSTRUMENTED:
     SQLCompiler.__execute_sql = SQLCompiler.execute_sql
     SQLCompiler.execute_sql = execute_sql

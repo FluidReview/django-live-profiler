@@ -1,15 +1,14 @@
 #!/bin/env python
-import argparse
-from threading import Thread
-
 import zmq
+import argparse
+
+from threading import Thread
 from zmq.eventloop import ioloop
 
 class Aggregator(object):
     def __init__(self):
         self.data = {}
 
-    
     def insert(self, tags, values):
         key = frozenset(tags.items())
         try:
@@ -19,8 +18,6 @@ class Aggregator(object):
         else:
             for i, v in values.iteritems():
                 rec[i] += v
-
-        
 
     def select(self, group_by=[], where={}):
         if not group_by and not where:
@@ -45,7 +42,6 @@ class Aggregator(object):
     def clear(self):
         self.data = {}
 
-
 def ctl(aggregator):
     context = zmq.Context.instance()
     socket = context.socket(zmq.REP)
@@ -63,8 +59,6 @@ def main():
     parser.add_argument('--port', dest='port', action='store', type=int,
                         default='5556',
                         help='The port to listen on')
-    
-
 
     args = parser.parse_args()
     context = zmq.Context.instance()
@@ -75,12 +69,11 @@ def main():
     statthread = Thread(target=ctl, args=(a,))
     statthread.daemon = True
     statthread.start()
-        
+
     while True:
         q = socket.recv_pyobj()
         for l in q:
             a.insert(*l)
-            
 
 if __name__ == "__main__":
     main()
