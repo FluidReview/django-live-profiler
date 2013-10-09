@@ -1,28 +1,35 @@
 #!/bin/env python
 import zmq
+import redis
 import argparse
 
 from threading import Thread
 from zmq.eventloop import ioloop
 
 class Aggregator(object):
-    def __init__(self):
+    def __init__(self, db):
         self.data = {}
 
+        self.__db = db
+
+        host, port, db = db.split(':')
+
+        self.client = redis.StrictRedis(host, int(port), db)
+
     def insert(self, tags, values):
-        key = frozenset(tags.items())
-        try:
-            rec = self.data[key]
-        except KeyError:
-            rec = self.data[key] = values.copy()
-        else:
-            for i, v in values.iteritems():
-                rec[i] += v
+        key = repr(frozenset(tags.items()))
+
+        for i, v in values.iteritems():
+            self.client.hincrbyfloat(key, i, float(v))
 
     def select(self, group_by=[], where={}):
+        from django.conf import settings
+
         if not group_by and not where:
             return [dict(list(k)+v.items()) for k,v in self.data.iteritems()]
-        a = Aggregator()
+
+        a = Aggregator(self.__db)
+
         for k, v in self.data.iteritems():
             matched = 0
             for key_k, key_v in k:
@@ -53,19 +60,24 @@ def ctl(aggregator):
 
 def main():
     parser = argparse.ArgumentParser(description='Run aggregation daemon')
+
     parser.add_argument('--host', dest='host', action='store',
                         default='127.0.0.1',
                         help='The IP address/hostname to listen on')
+
     parser.add_argument('--port', dest='port', action='store', type=int,
                         default='5556',
                         help='The port to listen on')
+
+    parser.add_argument('--db', dest='db', required=True,
+        action='store', help='Redis configuration (ip_address:port:dbnum)')
 
     args = parser.parse_args()
     context = zmq.Context.instance()
     socket = context.socket(zmq.SUB)
     socket.bind("tcp://%s:%d"%(args.host, args.port))
     socket.setsockopt(zmq.SUBSCRIBE,'')
-    a = Aggregator()
+    a = Aggregator(args.db)
     statthread = Thread(target=ctl, args=(a,))
     statthread.daemon = True
     statthread.start()
